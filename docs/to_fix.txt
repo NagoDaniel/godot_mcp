@@ -1,0 +1,2 @@
+In lookup_class maybe include header? In the constructor for example there
+is just "Vector2, Vector2". Not really useful.

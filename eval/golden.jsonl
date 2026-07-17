@@ -1,0 +1,20 @@
+{"tool": "search_docs", "query": "how do 2D lights and shadows work", "expect_url": "2d_lights_and_shadows"}
+{"tool": "search_docs", "query": "how to make a character jump and move on the floor", "expect_url": "using_character_body_2d"}
+{"tool": "search_docs", "query": "detect when a physics body enters an Area2D", "expect_url": "area2d"}
+{"tool": "search_docs", "query": "save and load game data to a file", "expect_url": "saving_games"}
+{"tool": "search_docs", "query": "run cleanup code before the game quits", "expect_url": "handling_quit_requests"}
+{"tool": "search_docs", "query": "connect a signal to a function", "expect_url": "signals"}
+{"tool": "search_docs", "query": "NOTIFICATION_WM_CLOSE_REQUEST", "expect_url": "notification-wm-close-request"}
+{"tool": "search_docs", "query": "using the AnimationPlayer to animate properties", "expect_url": "animation"}
+{"tool": "find_examples", "query": "move a CharacterBody2D with velocity and gravity", "expect_url": "character_body_2d", "expect_code": true}
+{"tool": "find_examples", "query": "platformer jump input handling", "expect_url": "character_body_2d", "expect_code": true}
+{"tool": "related_docs", "query": "Area2D", "expect_url": "area2d"}
+{"tool": "related_docs", "query": "Sprite2D", "expect_url": "sprite2d"}
+{"tool": "lookup_method", "args": {"class_name": "Node", "method": "add_child"}, "expect_url": "add-child"}
+{"tool": "lookup_method", "args": {"class_name": "CharacterBody2D", "method": "move_and_slide"}, "expect_url": "move-and-slide"}
+{"tool": "lookup_property", "args": {"class_name": "Sprite2D", "property": "texture"}, "expect_url": "sprite2d-property-texture"}
+{"tool": "lookup_signal", "args": {"class_name": "Area2D", "signal": "body_entered"}, "expect_url": "area2d-signal-body-entered"}
+{"tool": "lookup_constant", "args": {"class_name": "Node", "constant": "NOTIFICATION_WM_CLOSE_REQUEST"}, "expect_url": "constant-notification-wm-close-request"}
+{"tool": "show_inheritance", "args": {"class_name": "Area2D"}, "expect_url": "class_area2d"}
+{"tool": "search_symbols", "query": "body_entered", "args": {"kind": "signal"}, "expect_url": "signal-body-entered"}
+{"tool": "search_symbols", "query": "move_and_slide", "expect_url": "move-and-slide"}
