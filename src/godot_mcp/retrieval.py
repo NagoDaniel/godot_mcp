@@ -17,7 +17,6 @@ import re
 import sqlite3
 import sys
 import threading
-from functools import lru_cache
 
 import sqlite_vec
 from fastembed import TextEmbedding
@@ -40,74 +39,83 @@ RERANK_DEFAULT = os.environ.get("GODOT_MCP_RERANK", "1").lower() in ("1", "true"
 log = logging.getLogger("godot_mcp.retrieval")
 
 
-@lru_cache(maxsize=1)
+# Loaders are lock-guarded singletons rather than @lru_cache: the server may call
+# them from several worker threads at once (async tools are offloaded via
+# asyncio.to_thread) while the warmup thread loads in parallel, and lru_cache does
+# not prevent two threads from both running the body on a miss -- which for the
+# models would mean two concurrent Hugging Face downloads into the same cache.
+_con_lock = threading.Lock()
+_model_lock = threading.Lock()
+_reranker_lock = threading.Lock()
+_con_inst: sqlite3.Connection | None = None
+_model_inst: TextEmbedding | None = None
+_reranker_inst = None
+
+
 def _con() -> sqlite3.Connection:
-    con = sqlite3.connect(
-        f"file:{data.get_db_path()}?mode=ro", uri=True, check_same_thread=False
-    )
-    con.enable_load_extension(True)
-    sqlite_vec.load(con)
-    con.enable_load_extension(False)
-    con.row_factory = sqlite3.Row
-    return con
+    global _con_inst
+    if _con_inst is None:
+        with _con_lock:
+            if _con_inst is None:
+                con = sqlite3.connect(
+                    f"file:{data.get_db_path()}?mode=ro",
+                    uri=True,
+                    check_same_thread=False,
+                )
+                con.enable_load_extension(True)
+                sqlite_vec.load(con)
+                con.enable_load_extension(False)
+                con.row_factory = sqlite3.Row
+                _con_inst = con
+    return _con_inst
 
 
-@lru_cache(maxsize=1)
 def _model() -> TextEmbedding:
-    return TextEmbedding(model_name=MODEL_NAME)
+    global _model_inst
+    if _model_inst is None:
+        with _model_lock:
+            if _model_inst is None:
+                _model_inst = TextEmbedding(model_name=MODEL_NAME)
+    return _model_inst
 
 
-@lru_cache(maxsize=1)
 def _reranker():
-    from fastembed.rerank.cross_encoder import TextCrossEncoder
+    global _reranker_inst
+    if _reranker_inst is None:
+        from fastembed.rerank.cross_encoder import TextCrossEncoder
 
-    return TextCrossEncoder(model_name=RERANK_MODEL)
-
-
-_models_ready = threading.Event()
-
-
-def warm_index() -> None:
-    """Force the sqlite-vec index to load now (downloading it on first run),
-    rather than on the first tool call. This alone can take longer than an MCP
-    client's per-call timeout, so it belongs at server startup. Structured tools
-    (lookup_*, search_symbols) need nothing more than this to work.
-
-    Logs to stderr only — stdout is the stdio MCP transport's JSON-RPC channel,
-    and writing plain text there corrupts the protocol stream.
-    """
-    print("[godot-mcp] loading index (first run downloads ~160 MB)...",
-          file=sys.stderr, flush=True)
-    _con()
-    print("[godot-mcp] index ready.", file=sys.stderr, flush=True)
+        with _reranker_lock:
+            if _reranker_inst is None:
+                _reranker_inst = TextCrossEncoder(model_name=RERANK_MODEL)
+    return _reranker_inst
 
 
-def warm_models_async() -> None:
-    """Start loading the embedder/reranker (~210 MB + ~80 MB on first run) in a
-    background thread, so server startup isn't blocked on them too. Only
-    search_docs/find_examples/related_docs need these; they wait on
-    ``_ensure_models_ready()`` below, which is a no-op once this thread finishes.
+def start_warmup() -> None:
+    """Load the index and models in a background thread, so the server can start
+    serving (answer ``initialize``) immediately instead of blocking on a multi-
+    hundred-MB first-run download. That blocking was the bug: clients (e.g. Claude
+    Code) time out and kill the process before the download finishes, discarding the
+    partial file, so it never completes across restarts.
 
-    Splitting this out from warm_index() matters because a client's connection
-    timeout was seen to be shorter than the combined ~450 MB first-run cost --
-    the index alone is enough to get the server connected and structured tools
-    working, and RAG tools only block if they're called before this finishes.
+    Because startup no longer waits, the loaders are called lazily by tools too; the
+    locks above make the warmup thread and any early tool call converge on a single
+    load. Tools run in worker threads (asyncio.to_thread), so a call that arrives
+    mid-download blocks only that thread, never the event loop / keepalives.
+
+    Logs to stderr only — stdout is the stdio MCP transport's JSON-RPC channel.
     """
     def _load():
+        print("[godot-mcp] loading index (first run downloads ~160 MB)...",
+              file=sys.stderr, flush=True)
+        _con()
+        print("[godot-mcp] index ready; loading models (~290 MB on first run)...",
+              file=sys.stderr, flush=True)
         next(iter(_model().embed(["warmup"])))
         if RERANK_DEFAULT:
             list(_reranker().rerank("warmup", ["warmup"]))
-        print("[godot-mcp] models ready.", file=sys.stderr, flush=True)
-        _models_ready.set()
+        print("[godot-mcp] ready.", file=sys.stderr, flush=True)
 
     threading.Thread(target=_load, daemon=True).start()
-
-
-def _ensure_models_ready() -> None:
-    if not _models_ready.is_set():
-        print("[godot-mcp] waiting for embedder/reranker to finish loading...",
-              file=sys.stderr, flush=True)
-        _models_ready.wait()
 
 
 def _embed_query(query: str) -> bytes:
@@ -184,7 +192,6 @@ def search(
     pool and reorders it before taking the top ``k``.
     """
     use_rerank = RERANK_DEFAULT if rerank is None else rerank
-    _ensure_models_ready()
     con = _con()
     qvec = _embed_query(query)
     # rerank needs a wide candidate pool to reorder; otherwise fetch just what filters need

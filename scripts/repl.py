@@ -20,6 +20,8 @@ Type 'help' or 'quit' to exit.
 
 from __future__ import annotations
 
+import asyncio
+import inspect
 import json
 import sys
 from pathlib import Path
@@ -122,6 +124,9 @@ def main() -> None:
         try:
             fn = TOOLS[tool]
             result = fn(*args, **kwargs)
+            # tool handlers are async coroutines; drive to completion
+            if inspect.iscoroutine(result):
+                result = asyncio.run(result)
             print(format_result(result))
         except Exception as e:
             print(f"ERROR: {type(e).__name__}: {e}")

@@ -16,6 +16,7 @@ from __future__ import annotations
 import hashlib
 import os
 import sys
+import threading
 import urllib.request
 from pathlib import Path
 
@@ -23,6 +24,10 @@ from platformdirs import user_cache_dir
 
 APP = "godot-mcp"
 DB_FILENAME = "godot.sqlite"
+
+# Both the retrieval and lookup layers resolve the db independently; serialize the
+# resolve-and-maybe-download so two callers can't race on the same cache file.
+_resolve_lock = threading.Lock()
 
 # Pinned GitHub release asset for the prebuilt index. Override at runtime with
 # $GODOT_MCP_DB_URL. Bump the tag + checksum below whenever the index is rebuilt.
@@ -92,23 +97,27 @@ def get_db_path() -> Path:
     if _REPO_DB.exists():
         return _REPO_DB
 
-    cache = _cache_db()
-    if not cache.exists():
-        _download(_DEFAULT_DB_URL, cache)
-        return cache
-
-    # A previously cached index only stays valid if it matches the checksum this
-    # version of the code is pinned to -- otherwise a re-indexed release (different
-    # embedding model/dimensions) would silently keep serving the stale file and
-    # produce a dimension mismatch at query time instead of a clear re-download.
-    if _DB_SHA256:
-        marker = _cache_marker(cache)
-        cached_sha = marker.read_text(encoding="utf-8").strip() if marker.exists() else None
-        if cached_sha != _DB_SHA256:
-            print(
-                f"[godot-mcp] cached index is stale (pinned checksum changed), "
-                f"re-downloading...",
-                file=sys.stderr,
-            )
+    # Serialize: the warmup thread and any concurrent tool call both land here.
+    with _resolve_lock:
+        cache = _cache_db()
+        if not cache.exists():
             _download(_DEFAULT_DB_URL, cache)
-    return cache
+            return cache
+
+        # A previously cached index only stays valid if it matches the checksum this
+        # version of the code is pinned to -- otherwise a re-indexed release (different
+        # embedding model/dimensions) would silently keep serving the stale file and
+        # produce a dimension mismatch at query time instead of a clear re-download.
+        if _DB_SHA256:
+            marker = _cache_marker(cache)
+            cached_sha = (
+                marker.read_text(encoding="utf-8").strip() if marker.exists() else None
+            )
+            if cached_sha != _DB_SHA256:
+                print(
+                    "[godot-mcp] cached index is stale (pinned checksum changed), "
+                    "re-downloading...",
+                    file=sys.stderr,
+                )
+                _download(_DEFAULT_DB_URL, cache)
+        return cache

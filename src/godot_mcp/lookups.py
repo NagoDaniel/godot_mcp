@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from functools import lru_cache
+import threading
 
 from . import data
 from .textutil import resolve_links
@@ -32,13 +32,25 @@ _MEMBER_FIELDS = {
 }
 
 
-@lru_cache(maxsize=1)
+# Lock-guarded singleton (not @lru_cache): tool handlers run in worker threads, so
+# two structured calls can hit this concurrently on a cold start.
+_con_lock = threading.Lock()
+_con_inst: sqlite3.Connection | None = None
+
+
 def _con() -> sqlite3.Connection:
-    con = sqlite3.connect(
-        f"file:{data.get_db_path()}?mode=ro", uri=True, check_same_thread=False
-    )
-    con.row_factory = sqlite3.Row
-    return con
+    global _con_inst
+    if _con_inst is None:
+        with _con_lock:
+            if _con_inst is None:
+                con = sqlite3.connect(
+                    f"file:{data.get_db_path()}?mode=ro",
+                    uri=True,
+                    check_same_thread=False,
+                )
+                con.row_factory = sqlite3.Row
+                _con_inst = con
+    return _con_inst
 
 
 def _doc_url(uri: str, anchor: str = "") -> str:

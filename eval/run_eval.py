@@ -13,6 +13,8 @@ retrieval *quality* so M3 (hybrid/reranker) can target real misses.
 
 from __future__ import annotations
 
+import asyncio
+import inspect
 import json
 import sys
 from pathlib import Path
@@ -47,6 +49,9 @@ def _call(case: dict) -> list[dict]:
         if tool == "related_docs":
             kwargs["topic"] = kwargs.pop("query")
     result = getattr(M, tool)(**kwargs)
+    # tool handlers are async (they offload to a worker thread); drive to completion
+    if inspect.iscoroutine(result):
+        result = asyncio.run(result)
     return result if isinstance(result, list) else [result]
 
 
