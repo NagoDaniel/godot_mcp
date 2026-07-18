@@ -273,8 +273,13 @@ def related_docs(
 
 
 def main() -> None:
+    # Block startup only on the index (needed by every tool, structured and RAG
+    # alike) -- not the much larger embedder/reranker, which only search_docs/
+    # find_examples/related_docs need. A client's connect timeout can be shorter
+    # than the combined download, so keeping the blocking part small matters.
     L._con()
-    R.warmup()
+    R.warm_index()
+    R.warm_models_async()
     mcp.run()
 
 

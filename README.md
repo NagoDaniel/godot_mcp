@@ -30,16 +30,18 @@ Claude Desktop, Cursor, or VS Code, in the MCP config:
 }
 ```
 
-On the first run the server downloads the necessary models and embeddings and
-caches it in your home directory: the prebuilt index (about 160 MB, verified against a
-checksum from the GitHub release), the `bge-base` query embedder (about 210 MB), and
-the reranker (about 80 MB). After that, startup is quick. If you'd rather skip the
-reranker for a smaller download and slightly lower ranking quality, set
-`GODOT_MCP_RERANK=0` (the numbers are in `eval/`).
+On the first run the server downloads what it needs and caches it in your home
+directory: the prebuilt index (about 160 MB, verified against a checksum from the
+GitHub release), the `bge-base` query embedder (about 210 MB), and the reranker
+(about 80 MB). The server only waits on the index before it accepts connections --
+the structured lookup tools work as soon as that's ready, and the embedder/reranker
+finish loading in the background, so a semantic search issued in the first second or
+two may pause briefly until they're done. If your MCP client's connection attempt
+times out before the index finishes downloading, retrying works: the partial
+download doesn't carry over, but everything else already fetched does, so each
+attempt gets faster. If you'd rather skip the reranker for a smaller download and
+slightly lower ranking quality, set `GODOT_MCP_RERANK=0` (the numbers are in `eval/`).
 
-The index is resolved in this order (`src/godot_mcp/data.py`): the `$GODOT_MCP_DB`
-override, then a repo-local `store/godot.sqlite`, then the user cache, downloading from
-the pinned release if it isn't there yet.
 
 ## Tools
 

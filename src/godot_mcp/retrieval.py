@@ -16,6 +16,7 @@ import os
 import re
 import sqlite3
 import sys
+import threading
 from functools import lru_cache
 
 import sqlite_vec
@@ -63,22 +64,50 @@ def _reranker():
     return TextCrossEncoder(model_name=RERANK_MODEL)
 
 
-def warmup() -> None:
-    """Force the index/embedder/reranker to load now, rather than on the first
-    tool call. Downloading + loading these (index ~160 MB, embedder ~210 MB,
-    reranker ~80 MB on first run) can take longer than an MCP client's per-call
-    timeout; doing it during server startup avoids the first real query timing out.
+_models_ready = threading.Event()
+
+
+def warm_index() -> None:
+    """Force the sqlite-vec index to load now (downloading it on first run),
+    rather than on the first tool call. This alone can take longer than an MCP
+    client's per-call timeout, so it belongs at server startup. Structured tools
+    (lookup_*, search_symbols) need nothing more than this to work.
 
     Logs to stderr only — stdout is the stdio MCP transport's JSON-RPC channel,
     and writing plain text there corrupts the protocol stream.
     """
-    print("[godot-mcp] warming up index + models (first run downloads ~450 MB)...",
+    print("[godot-mcp] loading index (first run downloads ~160 MB)...",
           file=sys.stderr, flush=True)
     _con()
-    next(iter(_model().embed(["warmup"])))
-    if RERANK_DEFAULT:
-        list(_reranker().rerank("warmup", ["warmup"]))
-    print("[godot-mcp] ready.", file=sys.stderr, flush=True)
+    print("[godot-mcp] index ready.", file=sys.stderr, flush=True)
+
+
+def warm_models_async() -> None:
+    """Start loading the embedder/reranker (~210 MB + ~80 MB on first run) in a
+    background thread, so server startup isn't blocked on them too. Only
+    search_docs/find_examples/related_docs need these; they wait on
+    ``_ensure_models_ready()`` below, which is a no-op once this thread finishes.
+
+    Splitting this out from warm_index() matters because a client's connection
+    timeout was seen to be shorter than the combined ~450 MB first-run cost --
+    the index alone is enough to get the server connected and structured tools
+    working, and RAG tools only block if they're called before this finishes.
+    """
+    def _load():
+        next(iter(_model().embed(["warmup"])))
+        if RERANK_DEFAULT:
+            list(_reranker().rerank("warmup", ["warmup"]))
+        print("[godot-mcp] models ready.", file=sys.stderr, flush=True)
+        _models_ready.set()
+
+    threading.Thread(target=_load, daemon=True).start()
+
+
+def _ensure_models_ready() -> None:
+    if not _models_ready.is_set():
+        print("[godot-mcp] waiting for embedder/reranker to finish loading...",
+              file=sys.stderr, flush=True)
+        _models_ready.wait()
 
 
 def _embed_query(query: str) -> bytes:
@@ -151,10 +180,11 @@ def search(
 
     When filtering, we over-fetch a candidate ``pool`` from the vector index and
     filter in Python (sqlite-vec KNN can't be combined with arbitrary WHEREs). When
-    ``rerank`` is on (default ``GODOT_MCP_RERANK``), a cross-encoder rescences a larger
+    ``rerank`` is on (default ``GODOT_MCP_RERANK``), a cross-encoder rescores a larger
     pool and reorders it before taking the top ``k``.
     """
     use_rerank = RERANK_DEFAULT if rerank is None else rerank
+    _ensure_models_ready()
     con = _con()
     qvec = _embed_query(query)
     # rerank needs a wide candidate pool to reorder; otherwise fetch just what filters need

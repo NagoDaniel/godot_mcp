@@ -45,6 +45,13 @@ def _cache_db() -> Path:
     return Path(user_cache_dir(APP)) / DB_FILENAME
 
 
+def _cache_marker(dest: Path) -> Path:
+    # Records which checksum was verified when `dest` was cached, so later runs can
+    # detect a re-indexed release (new pinned checksum) without re-hashing the whole
+    # ~160 MB file on every startup -- just compare two short strings.
+    return dest.with_suffix(".sha256")
+
+
 def _sha256(path: Path) -> str:
     h = hashlib.sha256()
     with path.open("rb") as f:
@@ -68,6 +75,7 @@ def _download(url: str, dest: Path) -> None:
                 f"index checksum mismatch: expected {_DB_SHA256}, got {got}. "
                 "The download may be corrupt or the pinned checksum is stale."
             )
+        _cache_marker(dest).write_text(got, encoding="utf-8")
     tmp.replace(dest)
     print(f"[godot-mcp] index cached at {dest}", file=sys.stderr)
 
@@ -87,4 +95,20 @@ def get_db_path() -> Path:
     cache = _cache_db()
     if not cache.exists():
         _download(_DEFAULT_DB_URL, cache)
+        return cache
+
+    # A previously cached index only stays valid if it matches the checksum this
+    # version of the code is pinned to -- otherwise a re-indexed release (different
+    # embedding model/dimensions) would silently keep serving the stale file and
+    # produce a dimension mismatch at query time instead of a clear re-download.
+    if _DB_SHA256:
+        marker = _cache_marker(cache)
+        cached_sha = marker.read_text(encoding="utf-8").strip() if marker.exists() else None
+        if cached_sha != _DB_SHA256:
+            print(
+                f"[godot-mcp] cached index is stale (pinned checksum changed), "
+                f"re-downloading...",
+                file=sys.stderr,
+            )
+            _download(_DEFAULT_DB_URL, cache)
     return cache
