@@ -15,6 +15,7 @@ import logging
 import os
 import re
 import sqlite3
+import sys
 from functools import lru_cache
 
 import sqlite_vec
@@ -60,6 +61,24 @@ def _reranker():
     from fastembed.rerank.cross_encoder import TextCrossEncoder
 
     return TextCrossEncoder(model_name=RERANK_MODEL)
+
+
+def warmup() -> None:
+    """Force the index/embedder/reranker to load now, rather than on the first
+    tool call. Downloading + loading these (index ~160 MB, embedder ~210 MB,
+    reranker ~80 MB on first run) can take longer than an MCP client's per-call
+    timeout; doing it during server startup avoids the first real query timing out.
+
+    Logs to stderr only — stdout is the stdio MCP transport's JSON-RPC channel,
+    and writing plain text there corrupts the protocol stream.
+    """
+    print("[godot-mcp] warming up index + models (first run downloads ~450 MB)...",
+          file=sys.stderr, flush=True)
+    _con()
+    next(iter(_model().embed(["warmup"])))
+    if RERANK_DEFAULT:
+        list(_reranker().rerank("warmup", ["warmup"]))
+    print("[godot-mcp] ready.", file=sys.stderr, flush=True)
 
 
 def _embed_query(query: str) -> bytes:

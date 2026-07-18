@@ -137,6 +137,8 @@ def related_docs(topic: str, k: int = 6) -> list[dict]:
 
 
 def main() -> None:
+    L._con()
+    R.warmup()
     mcp.run()
 
 

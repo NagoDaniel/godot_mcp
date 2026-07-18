@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import sys
 import urllib.request
 from pathlib import Path
 
@@ -53,9 +54,11 @@ def _sha256(path: Path) -> str:
 
 
 def _download(url: str, dest: Path) -> None:
+    # stdout is the stdio MCP transport's JSON-RPC channel; log progress to stderr
+    # only, or plain text here corrupts the protocol stream.
     dest.parent.mkdir(parents=True, exist_ok=True)
     tmp = dest.with_suffix(".part")
-    print(f"[godot-mcp] downloading index (~160 MB) from {url} ...")
+    print(f"[godot-mcp] downloading index (~160 MB) from {url} ...", file=sys.stderr)
     urllib.request.urlretrieve(url, tmp)  # noqa: S310 (trusted release URL)
     if _DB_SHA256:
         got = _sha256(tmp)
@@ -66,7 +69,7 @@ def _download(url: str, dest: Path) -> None:
                 "The download may be corrupt or the pinned checksum is stale."
             )
     tmp.replace(dest)
-    print(f"[godot-mcp] index cached at {dest}")
+    print(f"[godot-mcp] index cached at {dest}", file=sys.stderr)
 
 
 def get_db_path() -> Path:
