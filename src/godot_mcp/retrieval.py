@@ -17,12 +17,20 @@ import re
 import sqlite3
 import sys
 import threading
+from typing import TYPE_CHECKING
 
 import sqlite_vec
-from fastembed import TextEmbedding
 
 from . import data
 from .textutil import resolve_links, strip_images
+
+if TYPE_CHECKING:
+    from fastembed import TextEmbedding
+
+# fastembed is imported lazily inside the loaders: it's a heavy import (~seconds) and
+# only the RAG tools need it, so paying it at module import would slow server startup
+# and structured-only sessions for no reason. `from __future__ import annotations`
+# keeps the TextEmbedding type hints below as strings, so they don't force the import.
 
 # Must match ingest/embed_index.py (embeddings are model-locked).
 MODEL_NAME = "BAAI/bge-base-en-v1.5"
@@ -73,6 +81,8 @@ def _con() -> sqlite3.Connection:
 def _model() -> TextEmbedding:
     global _model_inst
     if _model_inst is None:
+        from fastembed import TextEmbedding
+
         with _model_lock:
             if _model_inst is None:
                 _model_inst = TextEmbedding(model_name=MODEL_NAME)
