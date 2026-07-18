@@ -24,7 +24,7 @@ from . import data
 from .textutil import resolve_links, strip_images
 
 # Must match ingest/embed_index.py (embeddings are model-locked).
-MODEL_NAME = "BAAI/bge-large-en-v1.5"
+MODEL_NAME = "BAAI/bge-base-en-v1.5"
 
 # Cross-encoder reranker. Dense KNN gets the right page into the top-N but not always
 # rank 1; the reranker reorders a candidate pool to fix precision@1. Measured on the

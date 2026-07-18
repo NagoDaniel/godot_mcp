@@ -34,7 +34,7 @@ _DEFAULT_DB_URL = os.environ.get(
 # `python scripts/publish_release.py` after re-indexing; override via env for testing.
 _DB_SHA256 = os.environ.get(
     "GODOT_MCP_DB_SHA256",
-    "cb99427da5bd06aa120e3ef55c86b10f8f80a2cc92e2c63bfbe54d5f6896041e",
+    "f3d0bed54b94fc756e8289eb413c3f39cc0a808910610cbc9a8b0941a5812e77",
 )
 
 _REPO_DB = Path(__file__).resolve().parents[2] / "store" / DB_FILENAME

@@ -2,8 +2,10 @@
 
 Uses fastembed (ONNX, no torch) so the same lightweight runtime that indexes here
 can also embed the user's query in the shipped ``uvx`` package. The dense model is
-``BAAI/bge-large-en-v1.5`` (1024-d, ~1.3 GB, strong English retrieval) — a
-fastembed-supported stand-in for BGE-M3, which fastembed does not offer and whose
+``BAAI/bge-base-en-v1.5`` (768-d, ~210 MB) — with the cross-encoder reranker doing
+the precision-lifting at query time (see ``retrieval.py``), this matches
+``bge-large-en-v1.5``'s reranked quality (eval/README.md) at a sixth of the download.
+A fastembed-supported stand-in for BGE-M3, which fastembed does not offer and whose
 multilingual strength is moot for the English-only Godot docs.
 
 Everything lands in the existing ``store/godot.sqlite`` so the whole product ships
@@ -25,8 +27,8 @@ import sqlite_vec
 from fastembed import TextEmbedding
 
 # fastembed-supported dense English model. Change = full re-index (model-locked).
-MODEL_NAME = "BAAI/bge-large-en-v1.5"
-DIM = 1024
+MODEL_NAME = "BAAI/bge-base-en-v1.5"
+DIM = 768
 BATCH = 256
 
 DB_PATH = Path("store/godot.sqlite")

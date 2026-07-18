@@ -11,20 +11,28 @@ Runs the real tool functions in-process against `golden.jsonl`, prints a per-cas
 rank table and aggregate metrics, and **exits non-zero if recall@6 < 0.85** — so it
 doubles as a retrieval-regression gate.
 
-## Results (bge-large-en-v1.5, 20 cases)
+## Results (20 cases)
 
 | Mode | recall@1 | recall@3 | recall@6 | MRR |
 |------|---------|---------|---------|-----|
-| dense-only (`GODOT_MCP_RERANK=0`) | 0.75 | 0.85 | 0.95 | 0.832 |
-| + reranker (default, MiniLM-L-6)  | 0.85 | 0.95 | 1.00 | 0.902 |
+| bge-large, dense-only (`GODOT_MCP_RERANK=0`) | 0.75 | 0.85 | 0.95 | 0.832 |
+| bge-large + reranker | 0.85 | 0.95 | 1.00 | 0.902 |
+| bge-base, dense-only (`GODOT_MCP_RERANK=0`) | 0.80 | 0.95 | 0.95 | 0.873 |
+| bge-base + reranker (**current default**) | 0.85 | 0.95 | 1.00 | 0.902 |
 
-The dense-only misses were semantic-phrase queries where the literal terms point
-elsewhere — e.g. *"run cleanup code before the game quits"* (rank 7; "cleanup" pulls
-editor methods) and *"connect a signal to a function"* (rank 4; buried under the
-`Signal` class API). These are **reranker** cases, not lexical/BM25 cases — dense
-already nails exact API-name queries (`NOTIFICATION_WM_CLOSE_REQUEST` → rank 1). The
-cross-encoder reranker (`Xenova/ms-marco-MiniLM-L-6-v2`, 80 MB, torch-free ONNX) fixed
-both and saturated recall@6. Toggle with `GODOT_MCP_RERANK=1` to compare modes.
+With the reranker on, `bge-base-en-v1.5` (768-d, ~210 MB) matches `bge-large-en-v1.5`
+(1024-d, ~1.3 GB) exactly — and its dense-only numbers are even better on this set. The
+reranker does the precision-lifting either way, so the smaller, cheaper embedder is the
+better default: same reranked quality, a sixth of the download.
+
+The remaining misses (both models, dense-only) were semantic-phrase queries where the
+literal terms point elsewhere — e.g. *"run cleanup code before the game quits"* (rank
+7 unranked; "cleanup" pulls editor methods) and *"connect a signal to a function"*
+(rank 4; buried under the `Signal` class API). These are **reranker** cases, not
+lexical/BM25 cases — dense already nails exact API-name queries
+(`NOTIFICATION_WM_CLOSE_REQUEST` → rank 1). The cross-encoder reranker
+(`Xenova/ms-marco-MiniLM-L-6-v2`, 80 MB, torch-free ONNX) fixed both and saturated
+recall@6. Toggle with `GODOT_MCP_RERANK=0` to compare modes.
 
 ## Adding a case
 

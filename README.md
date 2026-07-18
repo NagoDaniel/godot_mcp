@@ -2,13 +2,13 @@
 
 An MCP server that gives coding agents accurate Godot knowledge. It offers two kinds
 of tools: exact structured lookups over the class reference, and semantic search over
-the full documentation. For now everything is built from the offline Godot 4.7 HTML
-docs in `godot-docs-html-stable/`, and it all ships as a single SQLite file
+the full documentation. For now everything is built from the Godot 4.7
+docs, and it all ships as a single SQLite file
 (`store/godot.sqlite`).
 
 ## Install
 
-You don't need to clone repo. `uvx` builds and runs the server from the
+You don't need to clone the repo. `uvx` builds and runs the server from the
 repository.
 
 Claude Code:
@@ -30,9 +30,9 @@ Claude Desktop, Cursor, or VS Code, in the MCP config:
 }
 ```
 
-On the first run the server downloads what it needs and
+On the first run the server downloads the necessary models and embeddings and
 caches it in your home directory: the prebuilt index (about 160 MB, verified against a
-checksum from the GitHub release), the `bge-large` query embedder (about 1.3 GB), and
+checksum from the GitHub release), the `bge-base` query embedder (about 210 MB), and
 the reranker (about 80 MB). After that, startup is quick. If you'd rather skip the
 reranker for a smaller download and slightly lower ranking quality, set
 `GODOT_MCP_RERANK=0` (the numbers are in `eval/`).
@@ -101,7 +101,7 @@ uv run python ingest/build_all.py     # parse, index, chunk, embed (a few minute
 uv run python scripts/smoke.py        # exercise every tool end-to-end; exit 0 means pass
 ```
 
-`build_all.py` writes `store/godot.sqlite` (around 160 MB once the `bge-large` vectors
+`build_all.py` writes `store/godot.sqlite` (around 160 MB once the `bge-base` vectors
 are in). That file is what gets attached to a release for `uvx` users.
 
 ## Design notes
@@ -116,11 +116,13 @@ A few smaller decisions worth knowing:
 
 - The `sphinx-tabs` GDScript/C# pairs are collapsed into labeled fenced code blocks so
   the same snippet isn't indexed twice.
-- Embeddings use `BAAI/bge-large-en-v1.5` (1024-d) through fastembed's ONNX runtime,
+- Embeddings use `BAAI/bge-base-en-v1.5` (768-d) through fastembed's ONNX runtime,
   which is torch-free, so the shipped package can embed a query cheaply. BGE-M3 was the
   original pick but isn't available in fastembed, and since the docs are English-only a
-  strong English BGE model fits better anyway. The embeddings are model-locked, so
-  changing the model means a full re-index.
+  strong English BGE model fits better anyway. The cross-encoder reranker does the
+  precision-lifting at query time, so `bge-base` matches the larger `bge-large` model's
+  reranked quality at a sixth of the download (see `eval/`). The embeddings are
+  model-locked, so changing the model means a full re-index.
 - The vectors live in `sqlite-vec` inside `godot.sqlite`, with an FTS5 table alongside
   for a future BM25 hybrid. There's no separate server process.
 
