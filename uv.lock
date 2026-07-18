@@ -344,6 +344,7 @@ dependencies = [
     { name = "fastembed" },
     { name = "mcp", extra = ["cli"] },
     { name = "platformdirs" },
+    { name = "pydantic" },
     { name = "sqlite-vec" },
 ]
 
@@ -363,6 +364,7 @@ requires-dist = [
     { name = "markdownify", marker = "extra == 'ingest'", specifier = ">=1.2.3" },
     { name = "mcp", extras = ["cli"], specifier = ">=1.28.1" },
     { name = "platformdirs", specifier = ">=4.0" },
+    { name = "pydantic", specifier = ">=2.0" },
     { name = "sphobjinv", marker = "extra == 'ingest'", specifier = ">=2.4" },
     { name = "sqlite-vec", specifier = ">=0.1.9" },
 ]

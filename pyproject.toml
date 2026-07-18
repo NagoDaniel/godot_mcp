@@ -11,6 +11,7 @@ dependencies = [
     "sqlite-vec>=0.1.9",
     "fastembed>=0.8.0",
     "platformdirs>=4.0",
+    "pydantic>=2.0",
 ]
 
 [project.urls]
