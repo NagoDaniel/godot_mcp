@@ -1,9 +1,9 @@
 # Godot Documentation MCP Server
 
-An MCP server that gives coding agents accurate Godot knowledge. It offers two kinds
+A local MCP server that gives coding agents accurate Godot knowledge based on the official Godot documentation. It offers two kinds
 of tools: exact structured lookups over the class reference, and semantic search over
 the full documentation. For now everything is built from the Godot 4.7
-docs, and it all ships as a single SQLite file
+docs, and it all ships as a single SQLite file.
 (`store/godot.sqlite`).
 
 ## Install
@@ -29,9 +29,13 @@ Claude Desktop, Cursor, or VS Code, in the MCP config:
   }
 }
 ```
+On Copilot, you can also paste in ```uvx --from git+https://github.com/NagoDaniel/godot_mcp godot-docs-mcp``` after selecting the stdio option.
+On the first run the server downloads what the necessary models and caches it in your home
+directory.
 
-On the first run the server downloads what it needs and caches it in your home
-directory: the prebuilt index (about 160 MB, verified against a checksum from the
+Thus you might need to wait a minute before the semantic search is available.
+
+Downloads: the prebuilt index (about 160 MB, verified against a checksum from the
 GitHub release), the `bge-base` query embedder (about 210 MB), and the reranker
 (about 80 MB). The server only waits on the index before it accepts connections --
 the structured lookup tools work as soon as that's ready, and the embedder/reranker
@@ -40,7 +44,7 @@ two may pause briefly until they're done. If your MCP client's connection attemp
 times out before the index finishes downloading, retrying works: the partial
 download doesn't carry over, but everything else already fetched does, so each
 attempt gets faster. If you'd rather skip the reranker for a smaller download and
-slightly lower ranking quality, set `GODOT_MCP_RERANK=0` (the numbers are in `eval/`).
+slightly lower ranking quality, set `GODOT_MCP_RERANK=0` (see `eval/`).
 
 
 ## Tools
