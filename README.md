@@ -1,5 +1,7 @@
 # Godot Documentation MCP Server
 
+![Godot MCP Logo](./godot_mcp_logo.png)
+
 A local MCP server that gives coding agents accurate Godot knowledge based on the official Godot documentation. It offers two kinds
 of tools: exact structured lookups over the class reference, and semantic search over
 the full documentation. For now everything is built from the Godot 4.7
